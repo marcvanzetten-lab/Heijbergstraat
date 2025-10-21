@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Verbouwing Planner</title>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -13,10 +18,45 @@
             margin: 0;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
         }
+        .sync-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 1000;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            animation: slideIn 0.3s;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .sync-synced { background: #10b981; color: white; }
+        .sync-syncing { background: #f59e0b; color: white; }
+        .sync-error { background: #ef4444; color: white; }
     </style>
 </head>
 <body>
     <div id="root"></div>
+
+    <!-- Firebase Initialization -->
+    <script>
+        // Initialize Firebase
+        const firebaseConfig = {
+            apiKey: "AIzaSyBCYIytYfXh7Ahb_MJ4DAXhX6wzM5A8umk",
+            authDomain: "heijbergstraat.firebaseapp.com",
+            projectId: "heijbergstraat",
+            storageBucket: "heijbergstraat.firebasestorage.app",
+            messagingSenderId: "914336110311",
+            appId: "1:914336110311:web:997919d5ae4b428badb442"
+        };
+        
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+    </script>
 
     <script type="text/babel">
         const { useState, useMemo, useEffect } = React;
@@ -123,6 +163,18 @@
         );
 
         const VerbouwingPlanner = () => {
+            // Sync status and lock
+            const [syncStatus, setSyncStatus] = useState(null);
+            const syncLockRef = React.useRef(false);
+            
+            // Show sync status temporarily
+            const showSyncStatus = (status) => {
+                setSyncStatus(status);
+                if (status === 'synced') {
+                    setTimeout(() => setSyncStatus(null), 2000);
+                }
+            };
+            
             // LocalStorage keys
             const STORAGE_KEYS = {
                 producten: 'verbouwing_producten',
@@ -140,6 +192,47 @@
                     console.error('Error loading from localStorage:', error);
                     return defaultValue;
                 }
+            };
+
+            // Firebase sync functions
+            const syncToFirebase = async (collection, data) => {
+                try {
+                    showSyncStatus('syncing');
+                    const batch = db.batch();
+                    
+                    // Clear existing data
+                    const snapshot = await db.collection(collection).get();
+                    snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                    
+                    // Add new data
+                    data.forEach(item => {
+                        const docRef = db.collection(collection).doc(String(item.id));
+                        batch.set(docRef, item);
+                    });
+                    
+                    await batch.commit();
+                    showSyncStatus('synced');
+                } catch (error) {
+                    console.error(`Sync error for ${collection}:`, error);
+                    showSyncStatus('error');
+                }
+            };
+
+            const loadFromFirebase = (collection, setData) => {
+                return db.collection(collection).onSnapshot(snapshot => {
+                    const items = [];
+                    snapshot.forEach(doc => {
+                        items.push({ ...doc.data(), id: doc.id });
+                    });
+                    if (items.length > 0) {
+                        syncLockRef.current = true; // Lock to prevent re-syncing
+                        setData(items);
+                        localStorage.setItem(STORAGE_KEYS[collection], JSON.stringify(items));
+                        setTimeout(() => { syncLockRef.current = false; }, 100); // Unlock after state update
+                    }
+                }, error => {
+                    console.error(`Load error for ${collection}:`, error);
+                });
             };
 
             // State met localStorage
@@ -187,21 +280,45 @@
                 ])
             );
 
-            // Save to localStorage whenever data changes
+            // Firebase realtime listeners (load from Firebase)
+            useEffect(() => {
+                const unsubscribers = [
+                    loadFromFirebase('producten', setProducten),
+                    loadFromFirebase('offertes', setOffertes),
+                    loadFromFirebase('taken', setTaken),
+                    loadFromFirebase('budget', setBudgetItems)
+                ];
+                
+                return () => unsubscribers.forEach(unsub => unsub && unsub());
+            }, []);
+
+            // Sync to Firebase whenever data changes (but not when loading from Firebase)
             useEffect(() => {
                 localStorage.setItem(STORAGE_KEYS.producten, JSON.stringify(producten));
+                if (!syncLockRef.current && producten.length > 0) {
+                    syncToFirebase('producten', producten);
+                }
             }, [producten]);
 
             useEffect(() => {
                 localStorage.setItem(STORAGE_KEYS.offertes, JSON.stringify(offertes));
+                if (!syncLockRef.current && offertes.length > 0) {
+                    syncToFirebase('offertes', offertes);
+                }
             }, [offertes]);
 
             useEffect(() => {
                 localStorage.setItem(STORAGE_KEYS.taken, JSON.stringify(taken));
+                if (!syncLockRef.current && taken.length > 0) {
+                    syncToFirebase('taken', taken);
+                }
             }, [taken]);
 
             useEffect(() => {
                 localStorage.setItem(STORAGE_KEYS.budget, JSON.stringify(budgetItems));
+                if (!syncLockRef.current && budgetItems.length > 0) {
+                    syncToFirebase('budget', budgetItems);
+                }
             }, [budgetItems]);
 
             const [activeTab, setActiveTab] = useState('dashboard');
@@ -384,6 +501,15 @@
 
             return (
                 <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+                    {/* Sync Indicator */}
+                    {syncStatus && (
+                        <div className={`sync-indicator sync-${syncStatus}`}>
+                            {syncStatus === 'synced' && '✓ Gesynchroniseerd'}
+                            {syncStatus === 'syncing' && '⟳ Aan het syncen...'}
+                            {syncStatus === 'error' && '✗ Sync fout'}
+                        </div>
+                    )}
+                    
                     <div className="max-w-7xl mx-auto">
                         {/* Header */}
                         <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
@@ -392,7 +518,7 @@
                                     <div className="text-indigo-600"><Home /></div>
                                     <div>
                                         <h1 className="text-3xl font-bold text-gray-800">Verbouwing Planner</h1>
-                                        <p className="text-gray-600">Organiseer jullie nieuwe huis</p>
+                                        <p className="text-gray-600">Organiseer jullie nieuwe huis • <span className="text-green-600 font-medium">🔥 Realtime sync actief</span></p>
                                     </div>
                                 </div>
                                 <div className="flex gap-2">

@@ -339,6 +339,8 @@
             const [filterTaakCategorie, setFilterTaakCategorie] = useState('Alle');
             const [filterPersoon, setFilterPersoon] = useState('Alle');
             const [filterTaakStatus, setFilterTaakStatus] = useState('Alle');
+            const [filterOfferteStatus, setFilterOfferteStatus] = useState('Alle');
+            const [filterOfferteBudget, setFilterOfferteBudget] = useState('Alle');
 
             const [formData, setFormData] = useState({});
 
@@ -531,6 +533,12 @@
 
             // Bereken unieke personen voor filter
             const uniekePersonen = [...new Set(taken.map(t => t.toegewezenAan).filter(Boolean))].sort();
+            
+            // Bereken unieke budget categorieën voor offertes filter
+            const uniekeBudgetCategorieen = [...new Set([
+                ...budgetItems.map(b => b.categorie),
+                ...offertes.map(o => o.budgetCategorie).filter(Boolean)
+            ])].sort();
 
             // Gefilterde producten
             const gefilterdeProducten = producten.filter(p => 
@@ -720,20 +728,28 @@
                                                 <h3 className="text-lg font-bold text-gray-800 mb-4">Recente Offertes</h3>
                                                 <div className="space-y-3">
                                                     {offertes.slice(0, 5).map(offerte => (
-                                                        <div key={offerte.id} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
+                                                        <div 
+                                                            key={offerte.id} 
+                                                            className="flex items-start justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 hover:shadow-md transition"
+                                                            onClick={() => openModal('offerte', offerte)}
+                                                        >
                                                             <div className="flex-1">
                                                                 <div className="font-medium text-gray-800">{offerte.leverancier}</div>
                                                                 <div className="text-sm text-gray-600 mt-1">{offerte.werk}</div>
                                                             </div>
-                                                            <div className="text-right ml-2">
-                                                                <div className="font-bold text-gray-800">€{offerte.bedrag.toLocaleString('nl-NL')}</div>
-                                                                <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
-                                                                    offerte.status === 'Geaccepteerd' ? 'bg-green-100 text-green-700' :
-                                                                    offerte.status === 'Afgewezen' ? 'bg-red-100 text-red-700' :
-                                                                    'bg-yellow-100 text-yellow-700'
-                                                                }`}>
-                                                                    {offerte.status}
-                                                                </span>
+                                                            <div className="text-right ml-2 flex items-center gap-2">
+                                                                <div>
+                                                                    <div className="font-bold text-gray-800">€{offerte.bedrag.toLocaleString('nl-NL')}</div>
+                                                                    <span className={`text-xs px-2 py-1 rounded-full whitespace-nowrap ${
+                                                                        offerte.status === 'Geaccepteerd' ? 'bg-green-100 text-green-700' :
+                                                                        offerte.status === 'Afgewezen' ? 'bg-red-100 text-red-700' :
+                                                                        offerte.status === 'Ontvangen' ? 'bg-yellow-100 text-yellow-700' :
+                                                                        'bg-blue-100 text-blue-700'
+                                                                    }`}>
+                                                                        {offerte.status}
+                                                                    </span>
+                                                                </div>
+                                                                <Edit2 className="w-4 h-4 text-gray-400" />
                                                             </div>
                                                         </div>
                                                     ))}
@@ -936,8 +952,94 @@
                                             </button>
                                         </div>
 
+                                        {/* Filters */}
+                                        <div className="flex gap-4 mb-6 flex-wrap">
+                                            <div className="flex items-center gap-2">
+                                                <Filter />
+                                                <select
+                                                    value={filterOfferteStatus}
+                                                    onChange={(e) => setFilterOfferteStatus(e.target.value)}
+                                                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                                >
+                                                    <option value="Alle">Alle statussen</option>
+                                                    <option value="Opgevraagd">Opgevraagd</option>
+                                                    <option value="Ontvangen">Ontvangen</option>
+                                                    <option value="Geaccepteerd">Geaccepteerd</option>
+                                                    <option value="Afgewezen">Afgewezen</option>
+                                                </select>
+                                            </div>
+                                            <select
+                                                value={filterOfferteBudget}
+                                                onChange={(e) => setFilterOfferteBudget(e.target.value)}
+                                                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                            >
+                                                <option value="Alle">Alle budgetten</option>
+                                                {uniekeBudgetCategorieen.map(cat => (
+                                                    <option key={cat} value={cat}>{cat}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Summary Card */}
+                                        {(() => {
+                                            const geaccepteerd = offertes.filter(o => o.status === 'Geaccepteerd');
+                                            const ontvangen = offertes.filter(o => o.status === 'Ontvangen');
+                                            const afgewezen = offertes.filter(o => o.status === 'Afgewezen');
+                                            const opgevraagd = offertes.filter(o => o.status === 'Opgevraagd');
+                                            const totaalGeaccepteerd = geaccepteerd.reduce((sum, o) => sum + o.bedrag, 0);
+                                            const totaalOntvangen = ontvangen.reduce((sum, o) => sum + o.bedrag, 0);
+                                            const totaalOpgevraagd = opgevraagd.reduce((sum, o) => sum + o.bedrag, 0);
+
+                                            return (
+                                                <div className="bg-gradient-to-r from-indigo-50 to-purple-50 p-6 rounded-lg border-2 border-indigo-200 mb-6">
+                                                    <h3 className="text-lg font-bold text-indigo-900 mb-4">Offertes Overzicht</h3>
+                                                    <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                                                        <div>
+                                                            <div className="text-sm text-indigo-700">Totaal</div>
+                                                            <div className="text-2xl font-bold text-indigo-900">{offertes.length}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm text-blue-700">Opgevraagd</div>
+                                                            <div className="text-2xl font-bold text-blue-800">{opgevraagd.length}</div>
+                                                            <div className="text-xs text-blue-600">€{totaalOpgevraagd.toLocaleString('nl-NL')}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm text-yellow-700">Ontvangen</div>
+                                                            <div className="text-2xl font-bold text-yellow-800">{ontvangen.length}</div>
+                                                            <div className="text-xs text-yellow-600">€{totaalOntvangen.toLocaleString('nl-NL')}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm text-green-700">Geaccepteerd</div>
+                                                            <div className="text-2xl font-bold text-green-800">{geaccepteerd.length}</div>
+                                                            <div className="text-xs text-green-600">€{totaalGeaccepteerd.toLocaleString('nl-NL')}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm text-red-700">Afgewezen</div>
+                                                            <div className="text-2xl font-bold text-red-800">{afgewezen.length}</div>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm text-purple-700">Totaal geaccepteerd</div>
+                                                            <div className="text-xl font-bold text-purple-900">€{totaalGeaccepteerd.toLocaleString('nl-NL')}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {offertes.map(offerte => (
+                                            {(() => {
+                                                // Filter en sorteer offertes
+                                                const gefilterdeOffertes = offertes
+                                                    .filter(o => filterOfferteStatus === 'Alle' || o.status === filterOfferteStatus)
+                                                    .filter(o => filterOfferteBudget === 'Alle' || o.budgetCategorie === filterOfferteBudget)
+                                                    .sort((a, b) => {
+                                                        // Sorteer op datum (nieuwste eerst)
+                                                        return new Date(b.datum) - new Date(a.datum);
+                                                    });
+
+                                                return (
+                                                    <>
+                                                        {gefilterdeOffertes.map(offerte => (
                                                 <div key={offerte.id} className="bg-white border-2 border-gray-200 rounded-lg p-5 hover:shadow-lg transition">
                                                     <div className="flex items-start justify-between mb-3">
                                                         <div className="flex-1">
@@ -947,13 +1049,25 @@
                                                     </div>
                                                     
                                                     <div className="mb-3">
-                                                        <span className={`inline-block px-3 py-1 text-sm rounded-full font-medium ${
-                                                            offerte.status === 'Geaccepteerd' ? 'bg-green-100 text-green-700' :
-                                                            offerte.status === 'Afgewezen' ? 'bg-red-100 text-red-700' :
-                                                            'bg-yellow-100 text-yellow-700'
-                                                        }`}>
-                                                            {offerte.status}
-                                                        </span>
+                                                        <button
+                                                            onClick={() => {
+                                                                const statussen = ['Opgevraagd', 'Ontvangen', 'Geaccepteerd', 'Afgewezen'];
+                                                                const huidigeIndex = statussen.indexOf(offerte.status);
+                                                                const nieuweStatus = statussen[(huidigeIndex + 1) % statussen.length];
+                                                                setOffertes(offertes.map(o => 
+                                                                    o.id === offerte.id ? { ...o, status: nieuweStatus } : o
+                                                                ));
+                                                            }}
+                                                            className={`inline-block px-3 py-1 text-sm rounded-full font-medium cursor-pointer hover:opacity-80 transition ${
+                                                                offerte.status === 'Geaccepteerd' ? 'bg-green-100 text-green-700' :
+                                                                offerte.status === 'Afgewezen' ? 'bg-red-100 text-red-700' :
+                                                                offerte.status === 'Ontvangen' ? 'bg-yellow-100 text-yellow-700' :
+                                                                'bg-blue-100 text-blue-700'
+                                                            }`}
+                                                            title="Klik om status te wijzigen"
+                                                        >
+                                                            {offerte.status} ↻
+                                                        </button>
                                                     </div>
 
                                                     <div className="space-y-2 mb-4">
@@ -993,10 +1107,20 @@
                                                     </div>
                                                 </div>
                                             ))}
+                                            {gefilterdeOffertes.length === 0 && (
+                                                <div className="col-span-full">
+                                                    <p className="text-gray-500 text-center py-8">
+                                                        {filterOfferteStatus === 'Alle' && filterOfferteBudget === 'Alle'
+                                                            ? 'Nog geen offertes toegevoegd'
+                                                            : 'Geen offertes gevonden met de huidige filters'
+                                                        }
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
                                         </div>
-                                        {offertes.length === 0 && (
-                                            <p className="text-gray-500 text-center py-8">Nog geen offertes toegevoegd</p>
-                                        )}
                                     </div>
                                 )}
 
@@ -1955,10 +2079,11 @@
                                                 <label className="block text-sm font-medium text-gray-700 mb-1">Status *</label>
                                                 <select
                                                     required
-                                                    value={formData.status || 'Ontvangen'}
+                                                    value={formData.status || 'Opgevraagd'}
                                                     onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                                 >
+                                                    <option value="Opgevraagd">Opgevraagd</option>
                                                     <option value="Ontvangen">Ontvangen</option>
                                                     <option value="Geaccepteerd">Geaccepteerd</option>
                                                     <option value="Afgewezen">Afgewezen</option>

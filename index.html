@@ -199,16 +199,13 @@
                 try {
                     console.log(`Syncing ${collection} to Firebase...`, data.length, 'items');
                     showSyncStatus('syncing');
+                    
+                    // Use set with merge to avoid deleting data
                     const batch = db.batch();
                     
-                    // Clear existing data
-                    const snapshot = await db.collection(collection).get();
-                    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-                    
-                    // Add new data
                     data.forEach(item => {
                         const docRef = db.collection(collection).doc(String(item.id));
-                        batch.set(docRef, item);
+                        batch.set(docRef, item, { merge: true });
                     });
                     
                     await batch.commit();
@@ -449,12 +446,42 @@
                 closeModal();
             };
 
-            const handleDelete = (type, id) => {
+            const handleDelete = async (type, id) => {
                 if (window.confirm('Weet je zeker dat je dit wilt verwijderen?')) {
-                    if (type === 'product') setProducten(producten.filter(p => p.id !== id));
-                    else if (type === 'offerte') setOffertes(offertes.filter(o => o.id !== id));
-                    else if (type === 'taak') setTaken(taken.filter(t => t.id !== id));
-                    else if (type === 'budget') setBudgetItems(budgetItems.filter(b => b.id !== id));
+                    // Delete from state (which triggers sync)
+                    if (type === 'product') {
+                        setProducten(producten.filter(p => p.id !== id));
+                        // Also delete from Firebase directly
+                        try {
+                            await db.collection('producten').doc(String(id)).delete();
+                        } catch (error) {
+                            console.error('Error deleting from Firebase:', error);
+                        }
+                    }
+                    else if (type === 'offerte') {
+                        setOffertes(offertes.filter(o => o.id !== id));
+                        try {
+                            await db.collection('offertes').doc(String(id)).delete();
+                        } catch (error) {
+                            console.error('Error deleting from Firebase:', error);
+                        }
+                    }
+                    else if (type === 'taak') {
+                        setTaken(taken.filter(t => t.id !== id));
+                        try {
+                            await db.collection('taken').doc(String(id)).delete();
+                        } catch (error) {
+                            console.error('Error deleting from Firebase:', error);
+                        }
+                    }
+                    else if (type === 'budget') {
+                        setBudgetItems(budgetItems.filter(b => b.id !== id));
+                        try {
+                            await db.collection('budget').doc(String(id)).delete();
+                        } catch (error) {
+                            console.error('Error deleting from Firebase:', error);
+                        }
+                    }
                 }
             };
 

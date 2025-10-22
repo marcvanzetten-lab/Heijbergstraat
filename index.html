@@ -197,6 +197,7 @@
             // Firebase sync functions
             const syncToFirebase = async (collection, data) => {
                 try {
+                    console.log(`Syncing ${collection} to Firebase...`, data.length, 'items');
                     showSyncStatus('syncing');
                     const batch = db.batch();
                     
@@ -211,27 +212,38 @@
                     });
                     
                     await batch.commit();
+                    console.log(`✓ ${collection} synced successfully`);
                     showSyncStatus('synced');
                 } catch (error) {
-                    console.error(`Sync error for ${collection}:`, error);
+                    console.error(`✗ Sync error for ${collection}:`, error);
                     showSyncStatus('error');
                 }
             };
 
             const loadFromFirebase = (collection, setData) => {
+                let isFirstLoad = true;
                 return db.collection(collection).onSnapshot(snapshot => {
                     const items = [];
                     snapshot.forEach(doc => {
                         items.push({ ...doc.data(), id: doc.id });
                     });
+                    
+                    // Always update if we receive data from Firebase
                     if (items.length > 0) {
-                        syncLockRef.current = true; // Lock to prevent re-syncing
+                        syncLockRef.current = true;
                         setData(items);
                         localStorage.setItem(STORAGE_KEYS[collection], JSON.stringify(items));
-                        setTimeout(() => { syncLockRef.current = false; }, 100); // Unlock after state update
+                        setTimeout(() => { syncLockRef.current = false; }, 500);
+                        
+                        // Show sync status on updates (but not first load)
+                        if (!isFirstLoad) {
+                            showSyncStatus('synced');
+                        }
+                        isFirstLoad = false;
                     }
                 }, error => {
                     console.error(`Load error for ${collection}:`, error);
+                    showSyncStatus('error');
                 });
             };
 

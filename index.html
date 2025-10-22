@@ -246,10 +246,7 @@
 
             // State met localStorage
             const [producten, setProducten] = useState(() => {
-                const loaded = loadFromStorage(STORAGE_KEYS.producten, [
-                    { id: 1, naam: 'Keuken', categorie: 'Keuken', prijs: 8500, link: 'https://example.com/keuken', leverancier: 'Keuken Inc', notities: 'Inclusief montage', gekocht: false, budgetCategorie: 'Keuken', type: 'Te kopen' },
-                    { id: 2, naam: 'Badkamer tegels', categorie: 'Badkamer', prijs: 1200, link: '', leverancier: 'Tegel Paleis', notities: '20m²', gekocht: false, budgetCategorie: 'Badkamer', type: 'Te kopen' }
-                ]);
+                const loaded = loadFromStorage(STORAGE_KEYS.producten, []);
                 // Zorg dat alle producten een type hebben (backwards compatibility)
                 return loaded.map(p => ({
                     ...p,
@@ -258,18 +255,11 @@
             });
 
             const [offertes, setOffertes] = useState(() =>
-                loadFromStorage(STORAGE_KEYS.offertes, [
-                    { id: 1, leverancier: 'Bouwbedrijf Jansen', werk: 'Metselwerk', bedrag: 15000, datum: '2025-10-15', status: 'Ontvangen', notities: 'Inclusief materiaal', budgetCategorie: 'Bouw' },
-                    { id: 2, leverancier: 'Elektra Pro', werk: 'Elektra', bedrag: 4500, datum: '2025-10-12', status: 'Geaccepteerd', notities: 'Start week 44', budgetCategorie: 'Elektra' }
-                ])
+                loadFromStorage(STORAGE_KEYS.offertes, [])
             );
 
             const [taken, setTaken] = useState(() => {
-                const loaded = loadFromStorage(STORAGE_KEYS.taken, [
-                    { id: 1, taak: 'Sloopvergunning aanvragen', toegewezenAan: 'Jan', prioriteit: 'Hoog', status: 'In uitvoering', categorie: 'Diensten', startDatum: '2025-10-20', eindDatum: '2025-10-25', notities: '' },
-                    { id: 2, taak: 'Kleurstalen ophalen', toegewezenAan: 'Marie', prioriteit: 'Medium', status: 'Te doen', categorie: 'Producten', startDatum: '2025-10-28', eindDatum: '2025-11-01', notities: 'Bij de verfwinkel' },
-                    { id: 3, taak: 'Keuken plaatsen', toegewezenAan: 'Jan', prioriteit: 'Hoog', status: 'Te doen', categorie: 'Diensten', startDatum: '2025-11-05', eindDatum: '2025-11-08', notities: 'Leverancier regelt montage' }
-                ]);
+                const loaded = loadFromStorage(STORAGE_KEYS.taken, []);
                 // Zorg dat alle taken de juiste velden hebben (voor backwards compatibility)
                 return loaded.map(t => ({
                     ...t,
@@ -281,12 +271,7 @@
             });
 
             const [budgetItems, setBudgetItems] = useState(() =>
-                loadFromStorage(STORAGE_KEYS.budget, [
-                    { id: 1, categorie: 'Keuken', gepland: 12000, notities: 'Keukeninrichting' },
-                    { id: 2, categorie: 'Badkamer', gepland: 8000, notities: 'Badkamerrenovatie' },
-                    { id: 3, categorie: 'Elektra', gepland: 5000, notities: 'Elektra werkzaamheden' },
-                    { id: 4, categorie: 'Bouw', gepland: 20000, notities: 'Bouwwerkzaamheden' }
-                ])
+                loadFromStorage(STORAGE_KEYS.budget, [])
             );
 
             // Firebase realtime listeners (load from Firebase)
@@ -531,6 +516,40 @@
                 }
             };
 
+            const resetAllData = async () => {
+                if (window.confirm('⚠️ WAARSCHUWING: Weet je ZEKER dat je ALLE data wilt verwijderen? Dit kan niet ongedaan gemaakt worden!\n\nTip: Maak eerst een backup via Export!')) {
+                    if (window.confirm('Laatste bevestiging: ALLES verwijderen?')) {
+                        try {
+                            // Clear state
+                            setProducten([]);
+                            setOffertes([]);
+                            setTaken([]);
+                            setBudgetItems([]);
+                            
+                            // Clear localStorage
+                            localStorage.removeItem(STORAGE_KEYS.producten);
+                            localStorage.removeItem(STORAGE_KEYS.offertes);
+                            localStorage.removeItem(STORAGE_KEYS.taken);
+                            localStorage.removeItem(STORAGE_KEYS.budget);
+                            
+                            // Clear Firebase
+                            const collections = ['producten', 'offertes', 'taken', 'budget'];
+                            for (const collection of collections) {
+                                const snapshot = await db.collection(collection).get();
+                                const batch = db.batch();
+                                snapshot.docs.forEach(doc => batch.delete(doc.ref));
+                                await batch.commit();
+                            }
+                            
+                            alert('✓ Alle data is verwijderd!');
+                        } catch (error) {
+                            console.error('Error resetting data:', error);
+                            alert('Er ging iets mis bij het verwijderen van data.');
+                        }
+                    }
+                }
+            };
+
             // Bereken unieke personen voor filter
             const uniekePersonen = [...new Set(taken.map(t => t.toegewezenAan).filter(Boolean))].sort();
             
@@ -568,7 +587,7 @@
                                         <p className="text-gray-600">Organiseer jullie nieuwe huis • <span className="text-green-600 font-medium">🔥 Realtime sync actief</span></p>
                                     </div>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex gap-2 flex-wrap">
                                     <label className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition cursor-pointer">
                                         <Upload />
                                         <span>Import</span>
@@ -580,6 +599,14 @@
                                     >
                                         <Download />
                                         Export
+                                    </button>
+                                    <button
+                                        onClick={resetAllData}
+                                        className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition"
+                                        title="Verwijder ALLE data (maak eerst backup!)"
+                                    >
+                                        <X />
+                                        Reset
                                     </button>
                                 </div>
                             </div>
